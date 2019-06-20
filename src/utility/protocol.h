@@ -177,6 +177,11 @@ namespace DYNAMIXEL{
 
   lib_err_code_t dxlTxPacket(dxl_t *p_packet);
   lib_err_code_t dxlTxPacketInst(dxl_t *p_packet, uint8_t id, uint8_t inst_cmd, uint8_t *p_data, uint16_t length);
+
+  void dxlUpdateCrc(uint16_t *p_crc_cur, uint8_t data_in);
+
+  uint16_t dxlAddStuffing(dxl_t *p_packet, uint8_t *p_data, uint16_t length);
+  uint16_t dxlRemoveStuffing(uint8_t *p_data, uint16_t length);
 }
 
 #endif /* DYNAMIXEL_PROTOCOL_H_ */

@@ -1,9 +1,6 @@
 #ifndef DYNAMIXEL_CONFIG_H_
 #define DYNAMIXEL_CONFIG_H_
 
-//TODO: move to Slave class. // DO NOT USE THIS FUNCTION YET.
-#define USE_SLAVE_FUNC 0
-
 #define ENABLE_ACTUATOR_AX              1
 #define ENABLE_ACTUATOR_DX              0
 #define ENABLE_ACTUATOR_RX              0
