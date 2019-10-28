@@ -413,15 +413,23 @@ class Dynamixel2Arduino : public DYNAMIXEL::Master
 #endif     
 
   private:
+#if defined(DXL_MAP_ALL_IDS)
+    uint8_t  id_to_dxl_model_map_[254];      // Could maybe cut size in half, but...
+    uint8_t id_to_dxl_model_map_index_last_; // remember the last one 
+    inline uint8_t  mapModelNumberToIndex(uint16_t model);
+    inline uint16_t mapIndexToModelNumber(uint8_t index);
+#else    
     typedef struct IdAndModelNum{
       uint16_t model_num;
       uint8_t id;
     } __attribute__((packed)) IdAndModelNum_t;
 
-    DYNAMIXEL::SerialPortHandler *p_dxl_port_;
-    
     IdAndModelNum_t registered_dxl_[DXL_MAX_NODE];
     uint8_t         registered_dxl_cnt_;
+#endif
+
+    DYNAMIXEL::SerialPortHandler *p_dxl_port_;
+    
     uint32_t        err_code_;
 
     uint16_t getModelNumberFromTable(uint8_t id);

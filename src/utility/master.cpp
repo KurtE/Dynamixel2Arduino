@@ -712,6 +712,10 @@ lib_err_code_t Master::getLastLibErrCode() const
   return last_lib_err_code_;
 }
 
+void Master::setLastLibErrCode(lib_err_code_t err_code)
+{
+  last_lib_err_code_ = err_code;
+}
 
 bool Master::txPacketInst(uint8_t id, uint8_t inst_cmd, uint8_t *p_data, uint16_t length) 
 {

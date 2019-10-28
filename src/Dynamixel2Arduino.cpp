@@ -69,11 +69,18 @@ static bool checkAndconvertReadData(int32_t in_data, float &out_data, uint8_t un
 
 Dynamixel2Arduino::Dynamixel2Arduino()
   : Master()
-{}
+{
+  #if defined(DXL_MAP_ALL_IDS)
+  memset(&id_to_dxl_model_map_, 0xff, sizeof(id_to_dxl_model_map_));
+  #endif    
+}
 
 Dynamixel2Arduino::Dynamixel2Arduino(HardwareSerial& port, int dir_pin)
   : Master()
 {
+  #if defined(DXL_MAP_ALL_IDS)
+  memset(&id_to_dxl_model_map_, 0xff, sizeof(id_to_dxl_model_map_));
+  #endif    
   p_dxl_port_ = new SerialPortHandler(port, dir_pin);
   setPort(p_dxl_port_);
 }
@@ -108,6 +115,54 @@ bool Dynamixel2Arduino::scan()
   return ret;
 }
 
+#if defined(DXL_MAP_ALL_IDS)
+// Lets define a constant table of all possible servos types...
+// Note: Should we make this conditional on which types are enabled?  
+#if defined(DXL_MAP_ALL_IDS)
+const uint16_t model_number_table[] PROGMEM = {
+    AX12A, AX12W, AX18A,
+    RX10, RX24F,  RX28, RX64,
+    DX113, DX116, DX117,
+    EX106,
+    MX12W, MX28, MX64, MX106,
+    MX28_2, MX64_2, MX106_2,
+    XL320,
+    XC430_W150, XC430_W240,
+    XL430_W250,
+    XXL430_W250,
+    XM430_W210, XM430_W350,
+    XM540_W150, XM540_W270, XH430_V210, XH430_V350, XH430_W210, XH430_W350,
+    XH540_W150, XH540_W270, XH540_V150, XH540_V270,
+    PRO_L42_10_S300_R, PRO_L54_30_S400_R, PRO_L54_30_S500_R, PRO_L54_50_S290_R, PRO_L54_50_S500_R,
+    PRO_M42_10_S260_R, PRO_M54_40_S250_R, PRO_M54_60_S250_R,  PRO_H42_20_S300_R, PRO_H54_100_S500_R, PRO_H54_200_S500_R,
+    PRO_M42_10_S260_RA, PRO_M54_40_S250_RA, PRO_M54_60_S250_RA,  PRO_H42_20_S300_RA, PRO_H54_100_S500_RA, PRO_H54_200_S500_RA,
+    PRO_H42P_020_S300_R, PRO_H54P_100_S500_R, PRO_H54P_200_S500_R,
+    PRO_M42P_010_S260_R, PRO_M54P_040_S250_R, PRO_M54P_060_S250_R
+};
+const uint8_t count_model_number_table = sizeof(model_number_table)/sizeof(model_number_table[0]);
+
+#endif
+
+uint8_t  Dynamixel2Arduino::mapModelNumberToIndex(uint16_t model) {
+  // quick shortcut
+  if (model == id_to_dxl_model_map_[id_to_dxl_model_map_index_last_])
+    return id_to_dxl_model_map_index_last_;
+
+  for (uint8_t index = 0; index < count_model_number_table; index++) {
+    if (model == model_number_table[index]) {
+      id_to_dxl_model_map_index_last_ = index;
+      return index;
+
+    }
+  } 
+    return 0xff;
+}
+
+uint16_t Dynamixel2Arduino::mapIndexToModelNumber(uint8_t index) {
+  return (index < count_model_number_table)? model_number_table[index] : UNREGISTERED_MODEL;
+}
+#endif
+
 bool Dynamixel2Arduino::ping(uint8_t id)
 {
   if(getPort() == nullptr)
@@ -118,8 +173,21 @@ bool Dynamixel2Arduino::ping(uint8_t id)
 
   if (id == DXL_BROADCAST_ID){
     RecvInfoFromPing_t recv_info;
-    registered_dxl_cnt_ = 0;
-
+    #if defined(DXL_MAP_ALL_IDS)
+    memset(&id_to_dxl_model_map_, 0xff, sizeof(id_to_dxl_model_map_));
+    if(Master::ping(DXL_BROADCAST_ID, recv_info, 3*253) == true){
+      for (i=0; i<recv_info.id_count; i++){
+        if(getPortProtocolVersion() == 2.0){
+          id_to_dxl_model_map_[recv_info.xel[i].id] = mapModelNumberToIndex(recv_info.xel[i].model_number);
+          //Serial.printf("PING-B %d model: %d index:%d\n", recv_info.xel[i].id, recv_info.xel[i].model_number, id_to_dxl_model_map_[recv_info.xel[i].id]);
+        }else{
+          id_to_dxl_model_map_[recv_info.xel[i].id] = mapModelNumberToIndex(getModelNumber(recv_info.xel[i].id));
+        }
+      }
+      ret = true;
+    } 
+    #else
+    registered_dxl_cnt_ = 0;    
     if(Master::ping(DXL_BROADCAST_ID, recv_info, 3*253) == true){
       for (i=0; i<recv_info.id_count && registered_dxl_cnt_<DXL_MAX_NODE; i++){
 
@@ -132,12 +200,28 @@ bool Dynamixel2Arduino::ping(uint8_t id)
         registered_dxl_cnt_++;
       }
       ret = true;
-    }  
+    } 
+    #endif 
   }else{
     XelInfoFromPing_t recv_info;
     if(Master::ping(id, &recv_info, 1, 20) > 0){
       if(recv_info.id != id)
         return false;
+      #if defined(DXL_MAP_ALL_IDS)
+      // See if we already mapped it... I suppose it could have changed...
+      if (id_to_dxl_model_map_[id] !=0xff) {
+          return true;
+      }
+
+      if(getPortProtocolVersion() == 2.0){
+        id_to_dxl_model_map_[id] = mapModelNumberToIndex(recv_info.model_number);
+        //Serial.printf("PING %d model: %d index:%d\n", id, recv_info.model_number, id_to_dxl_model_map_[id]);
+      }else{
+        id_to_dxl_model_map_[id] = mapModelNumberToIndex(getModelNumber(id));
+      }
+      ret = true;
+
+      #else
       for (i=0; i<registered_dxl_cnt_; i++){
         if (registered_dxl_[i].id == id)
           return true;
@@ -156,6 +240,7 @@ bool Dynamixel2Arduino::ping(uint8_t id)
       else{
         ret = false;
       }
+      #endif
     }
   }
 
@@ -806,7 +891,17 @@ uint16_t Dynamixel2Arduino::getModelNumberFromTable(uint8_t id)
 {
   uint16_t model_num = UNREGISTERED_MODEL;
   uint32_t i;
+  #if defined(DXL_MAP_ALL_IDS)
+  if (id < sizeof(id_to_dxl_model_map_)) {
+    if (id_to_dxl_model_map_[id] == 0xff) {
+      ping(id);
+    }
 
+    // map function will see that it is not there...
+    model_num = mapIndexToModelNumber(id_to_dxl_model_map_[id]);
+    //Serial.printf("GMNFT: id:%d index:%d model:%d\n", id, id_to_dxl_model_map_[id], model_num);
+  }
+  #else
   for(i = 0; i < DXL_MAX_NODE; i++)
   {
     if(registered_dxl_[i].id == id){
@@ -826,7 +921,7 @@ uint16_t Dynamixel2Arduino::getModelNumberFromTable(uint8_t id)
       }
     }
   }
-
+  #endif
   return model_num;
 }
 
